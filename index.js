@@ -244,7 +244,7 @@ app.get("/members", (req, res) => {
 });
 
 const {ObjectId} = require('mongodb');
-
+app.use('/admin', sessionValidation);
 app.use('/admin', adminAuthorization);
 
 app.get("/admin", async (req, res) => {
