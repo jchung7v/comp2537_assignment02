@@ -1,0 +1,8 @@
+<%- include ('templates/header') %> <% if (!username) { %>
+<button class="btn btn-success rounded-pill px-3" type="button" onClick='window.location.href="/signup"'>Sign Up</button>
+<button class="btn btn-warning rounded-pill px-3" type="button" onClick='window.location.href="/login"'>Log In</button>
+<% } else { %>
+<h3>Hello, <%= username %></h3>
+<button class="btn btn-success rounded-pill px-3" type="button" onClick='window.location.href="/members"'>Go to Members Area</button>
+<button class="btn btn-warning rounded-pill px-3" type="button" onClick='window.location.href="/logout"'>Log Out</button>
+<% } %> <%- include ('templates/footer') %>

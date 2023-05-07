@@ -11,6 +11,7 @@ const port = process.env.PORT || 3000;
 
 const fs = require("fs");
 const path = require("path");
+app.set('view engine', 'ejs');
 
 //expires after 1 hour  (hours * minutes * seconds * millis)
 const expireTime = 60 * 60 * 1000; 
@@ -47,23 +48,51 @@ app.use(
   })
 );
 
-// main page
-app.get("/", (req, res) => {
-  if (!req.session.username) {
-    var html = `
-        <button onClick='window.location.href="/signup"'>Sign Up</button>
-        <br>
-        <button onClick='window.location.href="/login"'>Log In</button>
-        `;
-  } else {
-    var html = `
-        <h3>Hello, ${req.session.username}</h3>
-        <button onClick='window.location.href="/members"'>Go to Members Area</button>
-        <br>
-        <button onClick='window.location.href="/logout"'>Log Out</button>
-        `;
+/* check if users have valid session (middleware) */
+function isValidSession(req) {
+  if (req.session.authenticated) {
+    return true;
   }
-  res.send(html);
+  return false;
+}
+
+function sessionValidation(req, res, next) {
+  if (isValidSession(req)) {
+    next();
+  }
+  else {
+    res.redirect('/login');
+  }
+}
+
+/* check if users are admin (middleware) */
+async function isAdmin(req) {
+  const user = await userCollection.findOne({ username: req.session.username });
+  if (user && user.usertype === "admin") {
+    console.log("It's true");
+    return true;
+  } else {
+    console.log("It's false");
+    return false;
+  }
+}
+
+async function adminAuthorization(req, res, next) {
+  if (await isAdmin(req)) {
+    console.log("Admin Authorization is working properly")
+    next();
+  }
+  else {
+    res.status(403);
+    res.render("errorMessage", {error: "Not Authorized"})
+    return;
+  }
+}
+
+/* main page */
+app.get("/", (req, res) => {
+  const username = req.session.username;
+  res.render('index', { username });
 });
 
 app.get('/nosql-injection', async (req,res) => {
@@ -91,52 +120,21 @@ app.get('/nosql-injection', async (req,res) => {
     res.send(`<h1>Hello ${username}</h1>`);
 });
 
-// Log in page
+/* Log in page */
 app.get("/login", (req, res) => {
-  var html = `
-    log in
-    <form action='/loggingin' method='post'>
-    <input name='email' type='text' placeholder='email'>
-    <br>
-    <input name='password' type='password' placeholder='password'>
-    <br>
-    <button>Submit</button>
-    </form>
-    `;
-  res.send(html);
+  res.render('login');
 });
 
-// Sign up page
+/* Sign up page */
 app.get("/signup", (req, res) => {
-  var missingUsername = req.query.missingUsername;
-  var missingEmail = req.query.missingEmail;
-  var missingPassword = req.query.missingPassword;
+  const missingUsername = req.query.missingUsername;
+  const missingEmail = req.query.missingEmail;
+  const missingPassword = req.query.missingPassword;
 
-  var html = `
-    create user
-    <form action='/submitUser' method='POST'>
-        <input type='text' name='username' placeholder='username'>
-        <br>
-        <input type='email' name='email' placeholder='email'>
-        <br>
-        <input type='password' name='password' placeholder='password'>
-        <button>Submit</button>
-    </form>
-    `;
-  if (missingUsername) {
-    html = `<p>Username is required</p>
-      <button onClick='window.location.href="/signup"'>Try again</button>`;
-  } else if (missingEmail) {
-    html = `<p>Email is required</p>
-      <button onClick='window.location.href="/signup"'>Try again</button>`;
-  } else if (missingPassword) {
-    html = `<p>Password is required</p>
-      <button onClick='window.location.href="/signup"'>Try again</button>`;
-  }
-  res.send(html);
+  res.render('signup', { missingUsername, missingEmail, missingPassword });
 });
 
-// create user
+/* create a user */
 app.post("/submitUser", async (req, res) => {
   var username = req.body.username;
   var email = req.body.email;
@@ -188,7 +186,7 @@ app.post("/submitUser", async (req, res) => {
   res.redirect("/members");
 });
 
-// Log in
+/* log in */
 app.post("/loggingin", async (req, res) => {
   var email = req.body.email;
   var password = req.body.password;
@@ -237,44 +235,51 @@ app.post("/loggingin", async (req, res) => {
   }
 });
 
-// Get random dog image
-function getRandomDogImage() {
-  const dogImagePath = path.join(__dirname, "public");
-  const dogImageFiles = fs.readdirSync(dogImagePath);
-  const randomIndex = Math.floor(Math.random() * dogImageFiles.length);
-  return `${dogImageFiles[randomIndex]}`;
-}
-
 app.use(express.static(__dirname + "/public"));
+app.use('/members', sessionValidation);
 
-// Members area
+/* members' area */
 app.get("/members", (req, res) => {
-  if (!req.session.authenticated) {
-    res.redirect("/login");
-    return;
-  }
-
-  const dogImage = getRandomDogImage();
-
-  var html = `
-  <h3>Hello, ${req.session.username}</h3>
-    <img src='${dogImage}' style='width:250px'>
-    <br>
-    <button onClick='window.location.href="/logout"'>Log Out</button>
-    `;
-  res.send(html);
+  res.render('members');
 });
 
-// Logout
+const {ObjectId} = require('mongodb');
+
+app.use('/admin', adminAuthorization);
+
+app.get("/admin", async (req, res) => {
+  const result = await userCollection.find().project({username: 1, usertype: 1, _id: 1}).toArray();
+  res.render('admin', { users: result });
+})
+
+/* promote a user to an admin */
+app.post("/promote/:id", async (req, res) => {
+  const id = req.params.id;
+    await userCollection.updateOne({_id: new ObjectId(id)}, {$set: {usertype: "admin"}});
+    const result = await userCollection.find().project({ _id: 1}).toArray();
+    res.render('admin', { users: result});
+});
+
+/* demote an admin to a user */
+app.post("/demote/:id", async (req, res) => {
+  const id = req.params.id;
+    await userCollection.updateOne({_id: new ObjectId(id)}, {$set: {usertype: "user"}});
+    const result = await userCollection.find().project({ _id: 1}).toArray();
+    res.render('admin', { users: result });
+  // }
+});
+
+
+/* logout */
 app.get("/logout", (req, res) => {
   req.session.destroy();
   res.redirect("/");
 });
 
-// 404 page
+/* 404 page */
 app.get("*", (req, res) => {
   res.status(404);
-  res.send("Page not found - 404");
+  res.render('404');
 });
 
 app.listen(port, () => {

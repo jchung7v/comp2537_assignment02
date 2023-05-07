@@ -1,0 +1,25 @@
+<%- include ('templates/header') %>
+<% if (missingUsername) { %>
+<p>Username is required</p>
+<button class="btn btn-warning rounded-pill px-3" type="button" onClick='window.location.href="/signup"'>Try Again</button>
+<% } else if (missingEmail) { %>
+<p>Email is required</p>
+<button class="btn btn-warning rounded-pill px-3" type="button" onClick='window.location.href="/signup"'>Try Again</button>
+<% } else if (missingPassword) { %>
+<p>Password is required</p>
+<button class="btn btn-warning rounded-pill px-3" type="button" onClick='window.location.href="/signup"'>Try Again</button>
+<% } else { %>
+<form action='/submitUser' method='POST'>
+  <div class="form-group col-sm-3">
+    <input type='text' name='username' class="form-control mb-2" id="exampleInputUserName" placeholder='username'>
+  </div>
+  <div class="form-group col-sm-3">
+    <input type='email' name='email' class="form-control mb-2" id="exampleInputEmail1" placeholder='email'>
+  </div>
+  <div class="form-group col-sm-3">
+    <input type='password' name='password' class="form-control mb-2" id="exampleInputPassword1" placeholder='password'>
+  </div>
+  <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+<% } %>
+<%- include ('templates/footer') %>
